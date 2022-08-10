@@ -1,0 +1,16 @@
+domain: db.example.vmware.com
+layout:
+- go.kubebuilder.io/v3
+projectName: pg-simple-operator
+repo: github.com/pkpivot/pg-simple-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: db.example.vmware.com
+  group: database
+  kind: Postgresql
+  path: github.com/pkpivot/pg-simple-operator/api/v1
+  version: v1
+version: "3"
