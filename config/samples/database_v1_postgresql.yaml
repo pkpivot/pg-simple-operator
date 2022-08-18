@@ -1,6 +1,7 @@
 apiVersion: database.db.example.vmware.com/v1
 kind: Postgresql
 metadata:
-  name: postgresql-sample
+  name: postgresql-sample-2
 spec:
-  # TODO(user): Add fields here
+  defaultuser: "pgowner"
+  password: "password123"

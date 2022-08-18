@@ -17,10 +17,10 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // PostgresqlSpec defines the desired state of Postgresql
@@ -29,13 +29,17 @@ type PostgresqlSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Postgresql. Edit postgresql_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	DefaultUser string `json:"defaultuser"`
+
+	Password string `json:"password"`
 }
 
 // PostgresqlStatus defines the observed state of Postgresql
 type PostgresqlStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	Active corev1.ObjectReference `json:"active,omitempty"`
 }
 
 //+kubebuilder:object:root=true

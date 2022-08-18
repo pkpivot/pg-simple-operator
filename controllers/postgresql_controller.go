@@ -18,14 +18,19 @@ package controllers
 
 import (
 	"context"
-
+	"fmt"
+	databasev1 "github.com/pkpivot/pg-simple-operator/api/v1"
+	apps "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	databasev1 "github.com/pkpivot/pg-simple-operator/api/v1"
+	"time"
 )
+
+const postgresImage = "postgres:14.5"
 
 // PostgresqlReconciler reconciles a Postgresql object
 type PostgresqlReconciler struct {
@@ -47,11 +52,88 @@ type PostgresqlReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.1/pkg/reconcile
 func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	var pg databasev1.Postgresql
+	err := r.Get(ctx, req.NamespacedName, &pg)
+	if err != nil {
+		logger.Error(err, "Could not retrieve postgresql object")
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	// Look for stateful set
+	// var statefulSet apps.StatefulSet
+	var pod v1.Pod
+
+	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
+		fmt.Printf("%T", err)
+		if client.IgnoreNotFound(err) != nil {
+			return ctrl.Result{}, err
+		}
+
+		// Now create the pod
+		podSpec := createPodSpec(pg)
+
+		pod.Spec = podSpec
+		pod.Name = pg.Name
+		pod.Namespace = pg.Namespace
+		if err := r.Create(ctx, &pod); err != nil {
+			logger.Error(err, "could not create pod")
+			return ctrl.Result{RequeueAfter: time.Second * 2}, nil
+		}
+
+	}
+
+	logger.Info("pod ", "name", pod.Name, "status", pod.Status.Phase)
+
+	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+}
+
+func createPodSpec(db databasev1.Postgresql) v1.PodSpec {
+	const dbDisk = "postgresql-db-disk"
+	container := v1.Container{
+		Name:  db.Name,
+		Image: postgresImage,
+		Ports: []v1.ContainerPort{{ContainerPort: 5432}},
+		Env: []v1.EnvVar{{Name: "POSTGRES_PASSWORD", Value: db.Spec.Password},
+			{Name: "PGDATA", Value: "/data/pgdata"}},
+		VolumeMounts: []v1.VolumeMount{{Name: dbDisk, MountPath: "/data"}},
+	}
+
+	result := v1.PodSpec{
+		Containers: []v1.Container{container},
+		// TODO - replace with persistentvolume claim
+		// default to emptydir for now
+		Volumes: []v1.Volume{{Name: dbDisk}},
+	}
+	return result
+}
+
+// TODO - Complete stateful set spec.
+func constructStatefulSet(db databasev1.Postgresql) (*apps.StatefulSet, error) {
+	name := db.Name
+
+	var i int32 = 1
+	spec := apps.StatefulSetSpec{
+		Replicas: &i,
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{"app": name},
+			MatchExpressions: []metav1.LabelSelectorRequirement{{
+				"app", metav1.LabelSelectorOpExists, []string{}},
+			},
+		},
+	}
+
+	statefulSet := &apps.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      make(map[string]string),
+			Annotations: make(map[string]string),
+			Name:        name,
+			Namespace:   db.Namespace,
+		},
+		Spec: spec,
+	}
+	return statefulSet, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
