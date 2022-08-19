@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - database.db.example.vmware.com
+  resources:
+  - postgresqls
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - database.db.example.vmware.com
+  resources:
+  - postgresqls/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - database.db.example.vmware.com
+  resources:
+  - postgresqls/status
+  verbs:
+  - get
+  - patch
+  - update

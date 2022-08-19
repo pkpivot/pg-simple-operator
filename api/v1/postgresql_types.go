@@ -27,17 +27,25 @@ import (
 type PostgresqlSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Postgresql. Edit postgresql_types.go to remove/update
 	DefaultUser string `json:"defaultuser"`
 
 	Password string `json:"password"`
 }
 
+type PgPhase string
+
+const (
+	PgUp      PgPhase = "up"
+	PgPending PgPhase = "pending"
+	PgFailed  PgPhase = "Failed"
+)
+
 // PostgresqlStatus defines the observed state of Postgresql
 type PostgresqlStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	Phase PgPhase `json:"active,omitempty"`
 
 	Active corev1.ObjectReference `json:"active,omitempty"`
 }

@@ -81,12 +81,20 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			logger.Error(err, "could not create pod")
 			return ctrl.Result{RequeueAfter: time.Second * 2}, nil
 		}
-
 	}
 
-	logger.Info("pod ", "name", pod.Name, "status", pod.Status.Phase)
+	switch pod.Status.Phase {
+	case v1.PodPending:
+		pg.Status.Phase = databasev1.PgPending
+	case v1.PodRunning:
+		pg.Status.Phase = databasev1.PgUp
+	default:
+		pg.Status.Phase = databasev1.PgFailed
+	}
 
-	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+	logger.Info("Status ", "name", pod.Name, "pod phase ", pod.Status.Phase, "Pg phase", pg.Status.Phase)
+
+	return ctrl.Result{RequeueAfter: time.Second * 2}, nil
 }
 
 func createPodSpec(db databasev1.Postgresql) v1.PodSpec {
