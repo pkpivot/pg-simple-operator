@@ -45,7 +45,7 @@ type PostgresqlStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Phase PgPhase `json:"active,omitempty"`
+	Phase PgPhase `json:"pgPhase,omitempty"`
 
 	Active corev1.ObjectReference `json:"active,omitempty"`
 }

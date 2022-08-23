@@ -18,19 +18,22 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	databasev1 "github.com/pkpivot/pg-simple-operator/api/v1"
 	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
 
 const postgresImage = "postgres:14.5"
+
+const postgresqlFinalizer = "database.db.example.vmware.com/finalizer"
 
 // PostgresqlReconciler reconciles a Postgresql object
 type PostgresqlReconciler struct {
@@ -58,20 +61,30 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	err := r.Get(ctx, req.NamespacedName, &pg)
 	if err != nil {
 		logger.Error(err, "Could not retrieve postgresql object")
+		// ignore not found errors - could be caused because the object is deleting
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if result, err := r.registerFinalizer(ctx, &pg); err != nil {
+		logger.Error(err, "Could not ergister finalizer")
+		return result, err
+	}
+
+	if objectDeleting(&pg) {
+		err := r.deleteExternalResources(ctx, &pg)
 		return ctrl.Result{}, err
 	}
 
-	// Look for stateful set
-	// var statefulSet apps.StatefulSet
+	// Look for Pod
+	// TODO - Upgrade this to a stateful set
 	var pod v1.Pod
 
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
-		fmt.Printf("%T", err)
 		if client.IgnoreNotFound(err) != nil {
 			return ctrl.Result{}, err
 		}
 
-		// Now create the pod
+		// A notFound error means we should create a pod
 		podSpec := createPodSpec(pg)
 
 		pod.Spec = podSpec
@@ -79,7 +92,7 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		pod.Namespace = pg.Namespace
 		if err := r.Create(ctx, &pod); err != nil {
 			logger.Error(err, "could not create pod")
-			return ctrl.Result{RequeueAfter: time.Second * 2}, nil
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
 	}
 
@@ -94,13 +107,32 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	logger.Info("Status ", "name", pod.Name, "pod phase ", pod.Status.Phase, "Pg phase", pg.Status.Phase)
 
-	return ctrl.Result{RequeueAfter: time.Second * 2}, nil
+	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+}
+
+func (r *PostgresqlReconciler) deleteExternalResources(ctx context.Context, pg *databasev1.Postgresql) error {
+	var pod v1.Pod
+	logger := log.FromContext(ctx)
+	if controllerutil.ContainsFinalizer(pg, postgresqlFinalizer) {
+		// our finalizer is present, so lets handle any external dependency
+		if err := r.Get(ctx, getPodNamespacedName(*pg), &pod); err == nil {
+			var policy metav1.DeletionPropagation
+			policy = metav1.DeletePropagationForeground
+			if err := r.Delete(ctx, &pod, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil {
+				logger.Error(err, "Could not delete pod")
+				return err
+			}
+		}
+	}
+	// remove our finalizer from the list and update it.
+	controllerutil.RemoveFinalizer(pg, postgresqlFinalizer)
+	return r.Update(ctx, pg)
 }
 
 func createPodSpec(db databasev1.Postgresql) v1.PodSpec {
 	const dbDisk = "postgresql-db-disk"
 	container := v1.Container{
-		Name:  db.Name,
+		Name:  getPodName(db),
 		Image: postgresImage,
 		Ports: []v1.ContainerPort{{ContainerPort: 5432}},
 		Env: []v1.EnvVar{{Name: "POSTGRES_PASSWORD", Value: db.Spec.Password},
@@ -117,6 +149,33 @@ func createPodSpec(db databasev1.Postgresql) v1.PodSpec {
 	return result
 }
 
+func getPodName(pg databasev1.Postgresql) string {
+	return pg.Name
+}
+
+func getPodNamespacedName(pg databasev1.Postgresql) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      getPodName(pg),
+		Namespace: pg.Namespace,
+	}
+}
+
+func (r *PostgresqlReconciler) registerFinalizer(ctx context.Context, pg *databasev1.Postgresql) (ctrl.Result, error) {
+	var err error
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if !objectDeleting(pg) {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !controllerutil.ContainsFinalizer(pg, postgresqlFinalizer) {
+			controllerutil.AddFinalizer(pg, postgresqlFinalizer)
+			err = r.Update(ctx, pg)
+		}
+	}
+	return ctrl.Result{}, err
+}
+
 // TODO - Complete stateful set spec.
 func constructStatefulSet(db databasev1.Postgresql) (*apps.StatefulSet, error) {
 	name := db.Name
@@ -127,7 +186,7 @@ func constructStatefulSet(db databasev1.Postgresql) (*apps.StatefulSet, error) {
 		Selector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{"app": name},
 			MatchExpressions: []metav1.LabelSelectorRequirement{{
-				"app", metav1.LabelSelectorOpExists, []string{}},
+				Key: "app", Operator: metav1.LabelSelectorOpExists, Values: []string{}},
 			},
 		},
 	}
@@ -142,6 +201,10 @@ func constructStatefulSet(db databasev1.Postgresql) (*apps.StatefulSet, error) {
 		Spec: spec,
 	}
 	return statefulSet, nil
+}
+
+func objectDeleting(pg *databasev1.Postgresql) bool {
+	return !pg.ObjectMeta.DeletionTimestamp.IsZero()
 }
 
 // SetupWithManager sets up the controller with the Manager.
