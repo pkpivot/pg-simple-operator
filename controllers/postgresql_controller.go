@@ -104,6 +104,7 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	default:
 		pg.Status.Phase = databasev1.PgFailed
 	}
+	r.Status().Update(ctx, &pg)
 
 	logger.Info("Status ", "name", pod.Name, "pod phase ", pod.Status.Phase, "Pg phase", pg.Status.Phase)
 
@@ -115,7 +116,7 @@ func (r *PostgresqlReconciler) deleteExternalResources(ctx context.Context, pg *
 	logger := log.FromContext(ctx)
 	if controllerutil.ContainsFinalizer(pg, postgresqlFinalizer) {
 		// our finalizer is present, so lets handle any external dependency
-		if err := r.Get(ctx, getPodNamespacedName(*pg), &pod); err == nil {
+		if err := r.Get(ctx, GetPodNamespacedName(*pg), &pod); err == nil {
 			var policy metav1.DeletionPropagation
 			policy = metav1.DeletePropagationForeground
 			if err := r.Delete(ctx, &pod, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil {
@@ -153,7 +154,7 @@ func getPodName(pg databasev1.Postgresql) string {
 	return pg.Name
 }
 
-func getPodNamespacedName(pg databasev1.Postgresql) types.NamespacedName {
+func GetPodNamespacedName(pg databasev1.Postgresql) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      getPodName(pg),
 		Namespace: pg.Namespace,
