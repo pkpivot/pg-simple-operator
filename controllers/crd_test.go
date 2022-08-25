@@ -7,9 +7,11 @@ import (
 	. "github.com/onsi/gomega"
 	databasev1 "github.com/pkpivot/pg-simple-operator/api/v1"
 	v1 "k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
+	//. "github.com/onsi/gomega"
 )
 
 var _ = Describe("postgresql_controller", func() {
@@ -34,7 +36,7 @@ var _ = Describe("postgresql_controller", func() {
 				return false
 			}
 			return true
-		}).WithTimeout(120 * time.Second).WithPolling(time.Second).Should(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
 
 		By("postgres object state change to running")
 		var retrievedPg databasev1.Postgresql
@@ -46,7 +48,7 @@ var _ = Describe("postgresql_controller", func() {
 				return true
 			}
 			return false
-		}).WithTimeout(600 * time.Second).WithPolling(time.Second).Should(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
 
 		By("deleting custom resource")
 		Expect(k8sClient.Delete(ctx, &pg)).Should(Succeed())
@@ -59,6 +61,6 @@ var _ = Describe("postgresql_controller", func() {
 				}
 			}
 			return false
-		}).WithTimeout(600 * time.Second).WithPolling(time.Second).Should(BeTrue())
+		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
 	})
 })
