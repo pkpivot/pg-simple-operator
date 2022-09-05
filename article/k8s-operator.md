@@ -1,0 +1,119 @@
+A# Extending the Kubernetes API 
+
+This article is aimed at developers already familiar with Kubernetes primitives, but who are interested in extending the capabilities of a Kubernetes cluster. 
+
+## Before you start
+
+You will need access to a Kubernetes cluster. Everything in this cluster was developed using [Minikube](https://minikube.sigs.k8s.io/docs/start/). 
+
+You will also need a [Go](https://go.dev) development environment. Kubernetes is written in Go, and although you can write controller code in other languages, Go is the best supported for this. All the Kubernetes APIs are available through Go modules. You can install Go on MacOS with homebrew:
+
+`brew install go` 
+
+Finally, you will need to install [`kubebuilder`](https://book.kubebuilder.io/quick-start.html). At the moment there is no support for  `kubebuilder` on Windows, but it will run on the Windows Subsystem for Linux (WSL). You need to install Go on the WSL first. 
+
+## Overview
+
+Kubernetes defines a set of primitives that are the building blocks for running containerized applications. These include Pods (for running containers), Persistent Volumes (for defining storage), and Services (for exposing applications on a network). Each of these primitives is a different **Kind** (analogous to a type in a programming language). 
+
+The full set of primitives enable you to build, run, and operate qutie sophisticated applications, but they are very generic abstractions. Running real world applications and services (like message queues and databases) can get complicated quite quickly. 
+
+Each object on your Kubernetes cluster is defined with YAML configuration file. And they all start like these ones: 
+  
+    apiVersion: v1
+    kind: Pod 
+    ---
+    apiVersion: v1
+    kind: PersistentVolume
+    ---
+    apiVersion: v1
+    kind: Service
+
+### Extensions
+
+Kubernetes enables you to extend the API by creating Custom Resource Definitions (CRD) which define new Kinds. For example, [cert-manager](https://cert-manager.io) defines an API for managing X.509 certificates in a cluster. It defines several Kinds including `Certificate` and `Issuer`. 
+
+These both belong to the `cert-manager.io` Group, and the API is currently at version `v1`. The configuration file for Kubernetes objects always starts with the specification for the Group Version Kind (GVK). For example, a cert-manager Issuer configuration always starts like this: 
+
+    apiVersion: cert-manager.io/v1
+    kind: Issuer
+
+### How does it work? 
+
+Adding a new CRD to a cluster means that you can create objects of a new Kind on the cluster, but how do you turn that into actual functionality? A Kubernetes object is a specification of a desired state, and to achieve that state, you need a controller. The `Reconcile()` function at the heart of the controller is passed an object, and requests the changes necessary to bring about the state requested by the object definition. 
+
+The control plane calls the `Reconcile()` function for each object of the Kind it controls in turn. The controller uses the Kubernetes API to create, update, or delete other objects as needed. The return result from `Reconcile()` tells the controller how long to wait before calling it for this object again. This reconciliation loop enables the controller to request a change and then wait to see if the desired state is now reached. It also gives the controller the opportunity to repair the state if it changes due to other events. 
+
+
+
+# Example  API extension
+
+In this article you can follow a worked example of extending the Kubernetes API with a `database v1` Group, consisting of a single new Kind, `Postgresql`. This example shows you how to get started with extending the Kubernetes API with your own CRDs. It ***does not*** show you how to run a production ready Postgresql server on a Kubernetes cluster. This would make the example too complex for a short article like this. 
+
+I've tried to pitch the complexity of this as being simple enough to follow the logic, while providing enough complexity to show you how to interact with the Kubernetes Control Plane to actually get things done. 
+
+A `Postgresql` configuration will look like this: 
+
+    apiVersion: database.technotuesday.io/v1
+    kind: Postgresql
+     metadata:
+        name: postgresql-sample
+    spec:
+        password: "Password123!"
+        defaultUser: "postgres"
+
+So to configure a running database server, you will provide a password and a defaultUser, and the code provided here will do the work of starting and configuring a Pod. As stated earlier, there are a lot of shortcomings here in terms of running a database server you could actually rely on. For example, you would want to be able to specify the compute and storage resources available, you would want to define your database's failover abilities. You might also want to provide a Kind that ran backups on a defined schedule, and so on. 
+
+To build and run the example you will follow these steps: 
+
+1. Generate the project for a new API Group Version. 
+1. Create a template Custom Resource Definition
+1. Define the CRD specification and status as Go types.  
+1. Create a controller. 
+1. Generate a CRD manifest from the Go definitions and install into your cluster.  
+1. Run/Debug the controller outside the cluster. 
+1. Install the controller into the cluster. 
+
+## Generate Project and CRD template
+
+In this first step you are naming and versioning your API group. Kubernetes requires every API group to belong to a domain. The domain ensures that all APIs have a unique fully qualified name. For example, the `cred-manager` APIs are part of the `cert-manager.io` domain. When you generate the project with kubebuilder, one of the parameters is the domain. If you are providing an API you intend to make publicly available you should use a domain name that you actually control in order to avoid potential name clashes with other third-party APIs; however, nothing is going to check the domain name you provide, so for this article, `example.com` will work as well as anything else. 
+
+The other important parameter is the repo name. This is used to name the Go module for the project, which avoids name-clashes with other Go projects. In the command below I've used the repo containing the original code for this example; you can fork the repo and use your own repo name here instead.  
+
+To create the project: 
+
+* `kubebuilder init --domain technotuesday.io --repo github.com/pkpivot/pg-simple-operator`
+
+To generate the CRD and controller templates: 
+
+* `kubebuilder create api --group database --version v1 --kind Postgresql`
+
+At this point you have a Go project with a module initialized with the dependencies needed to work with the Kubernetes API. The main points of interest: 
+
+* `main.go` contains the code that will connect your controller (`PostgresqlReconciler`) to the Kubernetes control plane. 
+
+* `Makefile` includes targets for building and running the controller, testing it, and for enerating the Kubernetes manifeest for your CRD. 
+
+* Under `api/v1` the `postgresql_types.go` file contains the template where you will define your CRD. 
+
+* Under `controllers` the `postgresql_controller.go` file defines the `PostgresqlReconciler` type together with a template `Reconcile` method. 
+
+* Under `config/crd` are `kustomize` templates to generate your CRD manifest (run `make manifests`)
+
+* Under `config\samples` a template manifest for running an object of your new kind on the cluster 
+
+In the next section, you will write the code defining your new CRD. 
+
+## Create the CRD
+
+CRDs are specified to a Kubernetes cluster by YAML manifest. However, `kubebuilder` enables us to use Go type definitions as a specification from which it generates the manifest. This is easier than creating the manifest by hand, and also ensures that the Go and Kubernetes definitions of the CRD remain in step. 
+
+
+
+
+
+
+
+
+
+
