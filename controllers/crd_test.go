@@ -9,7 +9,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 	//. "github.com/onsi/gomega"
 )
@@ -37,30 +36,30 @@ var _ = Describe("postgresql_controller", func() {
 			}
 			return true
 		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
+		//
+		//By("postgres object state change to running")
+		//var retrievedPg databasev1.Postgresql
+		//Eventually(func() bool {
+		//	if err := k8sClient.Get(ctx, GetPodNamespacedName(pg), &retrievedPg); err != nil {
+		//		return false
+		//	}
+		//	if retrievedPg.Status.Phase == databasev1.PgUp {
+		//		return true
+		//	}
+		//	return false
+		//}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
 
-		By("postgres object state change to running")
-		var retrievedPg databasev1.Postgresql
-		Eventually(func() bool {
-			if err := k8sClient.Get(ctx, GetPodNamespacedName(pg), &retrievedPg); err != nil {
-				return false
-			}
-			if retrievedPg.Status.Phase == databasev1.PgUp {
-				return true
-			}
-			return false
-		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
-
-		By("deleting custom resource")
-		Expect(k8sClient.Delete(ctx, &pg)).Should(Succeed())
-
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, GetPodNamespacedName(pg), &pod)
-			if err != nil {
-				if client.IgnoreNotFound(err) == nil {
-					return true
-				}
-			}
-			return false
-		}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
+		//By("deleting custom resource")
+		//Expect(k8sClient.Delete(ctx, &pg)).Should(Succeed())
+		//
+		//Eventually(func() bool {
+		//	err := k8sClient.Get(ctx, GetPodNamespacedName(pg), &pod)
+		//	if err != nil {
+		//		if client.IgnoreNotFound(err) == nil {
+		//			return true
+		//		}
+		//	}
+		//	return false
+		//}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeTrue())
 	})
 })

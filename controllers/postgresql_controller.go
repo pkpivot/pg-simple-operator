@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	databasev1 "github.com/pkpivot/pg-simple-operator/api/v1"
-	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,7 +32,7 @@ import (
 
 const postgresImage = "postgres:14.5"
 
-const postgresqlFinalizer = "database.db.example.vmware.com/finalizer"
+const postgresqlFinalizer = "database.db.example.com/finalizer"
 
 // PostgresqlReconciler reconciles a Postgresql object
 type PostgresqlReconciler struct {
@@ -57,6 +56,7 @@ type PostgresqlReconciler struct {
 func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// Retrieve the Postgresql object named in the reques
 	var pg databasev1.Postgresql
 	err := r.Get(ctx, req.NamespacedName, &pg)
 	if err != nil {
@@ -65,20 +65,9 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if result, err := r.registerFinalizer(ctx, &pg); err != nil {
-		logger.Error(err, "Could not ergister finalizer")
-		return result, err
-	}
-
-	if objectDeleting(&pg) {
-		err := r.deleteExternalResources(ctx, &pg)
-		return ctrl.Result{}, err
-	}
-
-	// Look for Pod
-	// TODO - Upgrade this to a stateful set
 	var pod v1.Pod
 
+	// If no corresponding pod exists, create one
 	if err := r.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if client.IgnoreNotFound(err) != nil {
 			return ctrl.Result{}, err
@@ -96,6 +85,7 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	// Update the status of the postgresql object based on the status of the Pod
 	switch pod.Status.Phase {
 	case v1.PodPending:
 		pg.Status.Phase = databasev1.PgPending
@@ -105,6 +95,16 @@ func (r *PostgresqlReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		pg.Status.Phase = databasev1.PgFailed
 	}
 	r.Status().Update(ctx, &pg)
+
+	if result, err := r.registerFinalizer(ctx, &pg); err != nil {
+		logger.Error(err, "Could not ergister finalizer")
+		return result, err
+	}
+
+	if objectDeleting(&pg) {
+		err := r.deleteExternalResources(ctx, &pg)
+		return ctrl.Result{}, err
+	}
 
 	logger.Info("Status ", "name", pod.Name, "pod phase ", pod.Status.Phase, "Pg phase", pg.Status.Phase)
 
@@ -175,33 +175,6 @@ func (r *PostgresqlReconciler) registerFinalizer(ctx context.Context, pg *databa
 		}
 	}
 	return ctrl.Result{}, err
-}
-
-// TODO - Complete stateful set spec.
-func constructStatefulSet(db databasev1.Postgresql) (*apps.StatefulSet, error) {
-	name := db.Name
-
-	var i int32 = 1
-	spec := apps.StatefulSetSpec{
-		Replicas: &i,
-		Selector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{"app": name},
-			MatchExpressions: []metav1.LabelSelectorRequirement{{
-				Key: "app", Operator: metav1.LabelSelectorOpExists, Values: []string{}},
-			},
-		},
-	}
-
-	statefulSet := &apps.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:      make(map[string]string),
-			Annotations: make(map[string]string),
-			Name:        name,
-			Namespace:   db.Namespace,
-		},
-		Spec: spec,
-	}
-	return statefulSet, nil
 }
 
 func objectDeleting(pg *databasev1.Postgresql) bool {

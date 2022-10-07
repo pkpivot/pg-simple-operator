@@ -25,8 +25,6 @@ import (
 
 // PostgresqlSpec defines the desired state of Postgresql
 type PostgresqlSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	DefaultUser string `json:"defaultuser"`
 
 	Password string `json:"password"`

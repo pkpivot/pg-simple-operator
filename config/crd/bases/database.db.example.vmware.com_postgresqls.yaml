@@ -36,8 +36,6 @@ spec:
             description: PostgresqlSpec defines the desired state of Postgresql
             properties:
               defaultuser:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
                 type: string
               password:
                 type: string
