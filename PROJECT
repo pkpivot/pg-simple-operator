@@ -1,4 +1,4 @@
-domain: db.example.vmware.com
+domain: db.example.com
 layout:
 - go.kubebuilder.io/v3
 projectName: pg-simple-operator
@@ -8,7 +8,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: db.example.vmware.com
+  domain: db.example.com
   group: database
   kind: Postgresql
   path: github.com/pkpivot/pg-simple-operator/api/v1

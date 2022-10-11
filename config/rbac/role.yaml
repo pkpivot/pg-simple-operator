@@ -6,7 +6,18 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - database.db.example.vmware.com
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - database.db.example.com
   resources:
   - postgresqls
   verbs:
@@ -18,13 +29,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - database.db.example.vmware.com
+  - database.db.example.com
   resources:
   - postgresqls/finalizers
   verbs:
   - update
 - apiGroups:
-  - database.db.example.vmware.com
+  - database.db.example.com
   resources:
   - postgresqls/status
   verbs:

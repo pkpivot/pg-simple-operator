@@ -40,9 +40,13 @@ type PostgresqlReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=database.db.example.vmware.com,resources=postgresqls,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=database.db.example.vmware.com,resources=postgresqls/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=database.db.example.vmware.com,resources=postgresqls/finalizers,verbs=update
+//+kubebuilder:rbac:groups=database.db.example.com,resources=postgresqls,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=database.db.example.com,resources=postgresqls/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=database.db.example.com,resources=postgresqls/finalizers,verbs=update
+
+// Permissions to access Pods
+
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;create;update;delete;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
